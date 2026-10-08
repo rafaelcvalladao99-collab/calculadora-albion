@@ -3,6 +3,9 @@ import { getEquipmentData } from './equipmentService.js';
 import { analyzePotions } from './potionService.js';
 
 import express from 'express';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import cors from 'cors';
 import {
   buscarOportunidades,
@@ -303,6 +306,21 @@ app.get(
   }),
 );
 
-app.listen(PORT, () => {
-  console.log(`API REST em http://localhost:${PORT}`);
+// ─── Tela do app (quando a pasta frontend/dist já foi gerada) ───
+// Assim, rodando no computador, um único programa entrega a tela e os dados.
+const PASTA_TELA = fileURLToPath(new URL('../../frontend/dist', import.meta.url));
+if (fs.existsSync(path.join(PASTA_TELA, 'index.html'))) {
+  app.use(express.static(PASTA_TELA));
+  app.get(/^(?!\/api\/).*/, (_req, res) => res.sendFile(path.join(PASTA_TELA, 'index.html')));
+}
+
+// Sem código de acesso, só o próprio computador consegue abrir o app.
+const HOST = process.env.HOST || (AUTH_ATIVA ? '0.0.0.0' : '127.0.0.1');
+
+app.listen(PORT, HOST, () => {
+  console.log('');
+  console.log('  Calculadora Albion rodando!');
+  console.log(`  Abra no navegador: http://localhost:${PORT}`);
+  console.log('  Para fechar, feche esta janela.');
+  console.log('');
 });
