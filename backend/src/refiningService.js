@@ -224,6 +224,14 @@ function buildPeakHourMap(histData) {
   return result;
 }
 
+/** Data da API (UTC sem fuso) → ISO com "Z", ou null se vazia. */
+function isoUtc(valor) {
+  if (!valor || String(valor).startsWith('0001')) return null;
+  const s = String(valor);
+  const d = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
 function convertToUTC3(isoDate) {
   if (!isoDate) return null;
   const dateStr = String(isoDate);
@@ -546,11 +554,21 @@ async function estrategiaCompletaRecurso(resource, body) {
 
   const dc = new Map();
   const dv = new Map();
+  // Quando cada preço atual foi visto (ISO em UTC). Sem entrada = preço estimado pela média.
+  const dcData = new Map();
+  const dvData = new Map();
   for (const p of res) {
     const key = `${cityKey(p.city)}|${p.item_id}`;
-    const val = buyOrder && p.buy_price_max > 0 ? p.buy_price_max : p.sell_price_min;
-    if (val > 0) dc.set(key, val);
-    if (p.sell_price_min > 0) dv.set(key, p.sell_price_min);
+    const usaBuy = buyOrder && p.buy_price_max > 0;
+    const val = usaBuy ? p.buy_price_max : p.sell_price_min;
+    if (val > 0) {
+      dc.set(key, val);
+      dcData.set(key, isoUtc(usaBuy ? p.buy_price_max_date : p.sell_price_min_date));
+    }
+    if (p.sell_price_min > 0) {
+      dv.set(key, p.sell_price_min);
+      dvData.set(key, isoUtc(p.sell_price_min_date));
+    }
   }
 
   const royalDc = new Map();
@@ -663,8 +681,16 @@ async function estrategiaCompletaRecurso(resource, body) {
         ? (lucroOTComFoco - lucroOTSemFoco) / focoUnidades : null;
 
       if (lucroLocal != null || lucroOpt != null || lucroOT != null) {
+        // Idade do preço mais antigo usado na conta local (matéria-prima, refinado anterior, produto).
+        const chaves = [iT, iA, iP].map((it) => `${cityKey(cityName)}|${it}`);
+        const datas = [dcData.get(chaves[0]), dcData.get(chaves[1]), dvData.get(chaves[2])];
+        const usaMedia = dailyBonus > 0;
+        const estimado = datas.slice(0, usaMedia ? 2 : 3).some((d) => !d);
+        const conhecidas = datas.filter(Boolean).sort();
         fsFoco.push({
           item: `${t}${enc}`,
+          atualizacao: conhecidas[0] ?? null,
+          estimado,
           lucro: lucroLocal ?? -9e8,
           volume: vFs,
           lucroOpt: lucroOpt ?? -9e8,

@@ -19,6 +19,11 @@ const EquipBuy        = lazy(() => import('./components/EquipBuy.jsx'));
 const RefinementHub   = lazy(() => import('./components/RefinementHub.jsx'));
 const PotionAnalyzer  = lazy(() => import('./components/PotionAnalyzer.jsx'));
 
+// Larguras de tela (px): acima de TELA_LARGA o menu começa aberto;
+// abaixo de TELA_MEDIA ele flutua por cima do conteúdo.
+const TELA_LARGA = 1280;
+const TELA_MEDIA = 1024;
+
 // ─── Nav structure ────────────────────────────────────────────────────────
 const NAV_TOP = [
   { id: 'hub', path: '/hub', label: 'Hub', iconKey: 'dashboard' },
@@ -44,7 +49,7 @@ function labelForPath(pathname) {
 }
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────
-function Sidebar({ expanded, onToggle }) {
+function Sidebar({ expanded, onToggle, onNavigate }) {
   return (
     <aside className={`sb ${expanded ? 'sb-open' : 'sb-closed'}`}>
       {/* Logo block */}
@@ -70,19 +75,19 @@ function Sidebar({ expanded, onToggle }) {
 
       <nav className="sb-nav">
         {NAV_TOP.map(item => (
-          <NavItem key={item.id} item={item} expanded={expanded} />
+          <NavItem key={item.id} item={item} expanded={expanded} onNavigate={onNavigate} />
         ))}
 
         <div className="sb-divider" />
         <div className="sb-section" style={{ opacity: expanded ? 1 : 0 }}>Refino</div>
         {NAV_REFINERS.map(item => (
-          <NavItem key={item.id} item={item} expanded={expanded} />
+          <NavItem key={item.id} item={item} expanded={expanded} onNavigate={onNavigate} />
         ))}
 
         <div className="sb-divider" />
         <div className="sb-section" style={{ opacity: expanded ? 1 : 0 }}>Mercado</div>
         {NAV_MARKET.map(item => (
-          <NavItem key={item.id} item={item} expanded={expanded} />
+          <NavItem key={item.id} item={item} expanded={expanded} onNavigate={onNavigate} />
         ))}
       </nav>
 
@@ -104,11 +109,12 @@ function Sidebar({ expanded, onToggle }) {
   );
 }
 
-function NavItem({ item, expanded }) {
+function NavItem({ item, expanded, onNavigate }) {
   const Icon = ICONS[item.iconKey];
   return (
     <NavLink
       to={item.path}
+      onClick={onNavigate}
       title={!expanded ? item.label : undefined}
       className={({ isActive }) =>
         ['sb-item', isActive ? 'sb-item-active sb-active-hairline' : '']
@@ -122,11 +128,14 @@ function NavItem({ item, expanded }) {
 }
 
 // ─── Top bar ──────────────────────────────────────────────────────────────
-function TopBar() {
+function TopBar({ onMenu }) {
   const location = useLocation();
   const title = labelForPath(location.pathname);
   return (
     <header className="tb">
+      <button type="button" className="tb-menu" onClick={onMenu} aria-label="Abrir menu">
+        <ICONS.menu size={18} />
+      </button>
       <div className="tb-crumbs">
         <span className="tb-crumb-muted">Calculadora</span>
         <span className="tb-crumb-sep"><ICONS.slash size={14} /></span>
@@ -145,7 +154,25 @@ export default function App() {
     () => sessionStorage.getItem('albion_token') != null,
   );
   const [equipmentReady, setEquipmentReady] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Menu aberto por padrão em telas largas; recolhido em telas menores.
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= TELA_LARGA);
+
+  useEffect(() => {
+    let larga = window.innerWidth >= TELA_LARGA;
+    const aoRedimensionar = () => {
+      const agoraLarga = window.innerWidth >= TELA_LARGA;
+      if (agoraLarga !== larga) {
+        larga = agoraLarga;
+        setSidebarOpen(agoraLarga);
+      }
+    };
+    window.addEventListener('resize', aoRedimensionar);
+    return () => window.removeEventListener('resize', aoRedimensionar);
+  }, []);
+
+  const fecharSeTelaPequena = () => {
+    if (window.innerWidth < TELA_MEDIA) setSidebarOpen(false);
+  };
 
   // Rodando no computador sem código de acesso, o servidor avisa que não precisa de senha.
   useEffect(() => {
@@ -185,10 +212,17 @@ export default function App() {
   }
 
   return (
-    <div className="app">
-      <Sidebar expanded={sidebarOpen} onToggle={() => setSidebarOpen(x => !x)} />
+    <div className={`app ${sidebarOpen ? 'app-sb-aberto' : ''}`}>
+      <Sidebar
+        expanded={sidebarOpen}
+        onToggle={() => setSidebarOpen(x => !x)}
+        onNavigate={fecharSeTelaPequena}
+      />
+      {sidebarOpen && (
+        <div className="sb-fundo" onClick={() => setSidebarOpen(false)} aria-hidden="true" />
+      )}
       <main className="main">
-        <TopBar />
+        <TopBar onMenu={() => setSidebarOpen(true)} />
         <div className="page">
           <Suspense fallback={fallback}>
             <Routes>

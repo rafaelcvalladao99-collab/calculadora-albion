@@ -295,7 +295,7 @@ function FarmFamaPanel({ open, onToggle, strategy, strategyLoading, cfg, rc }) {
                         <ItemImg
                           src={ITEM_ICON_URL(rc.buildRefinedId(tier, level))}
                           alt={r.item}
-                          size={56}
+                          size={40}
                         />
                       </div>
                       <span className="ff2-label mono">{r.item}</span>
@@ -344,19 +344,22 @@ function AccordionRow({ row, open, onToggle, rc }) {
   return (
     <div className={`acc${open ? ' acc-open' : ''}`}>
       <button className="acc-head" onClick={onToggle} aria-expanded={open}>
-        <span className={`acc-tier mono${isEnc ? ' acc-tier-enc' : ''}`}>{row.nivel}</span>
+        <span className="acc-tier mono">
+          {tier}
+          {isEnc && <span className={`enc-pill enc-${level}`}>.{level}</span>}
+        </span>
 
         <div className="acc-ing-stack">
           <div className="acc-ing">
-            <ItemImg src={ITEM_ICON_URL(rawId)} alt="raw" size={52} />
+            <ItemImg src={ITEM_ICON_URL(rawId)} alt="raw" size={36} />
             <span className="ing-qty">×{row.qtTronco ?? 4}</span>
           </div>
           <div className="acc-ing acc-ing-dim">
-            <ItemImg src={ITEM_ICON_URL(antId)} alt="ant" size={52} />
+            <ItemImg src={ITEM_ICON_URL(antId)} alt="ant" size={36} />
             <span className="ing-qty">×1</span>
           </div>
           <div className="acc-ing">
-            <ItemImg src={ITEM_ICON_URL(outId)} alt="out" size={52} />
+            <ItemImg src={ITEM_ICON_URL(outId)} alt="out" size={36} />
             <span className="ing-qty">×1</span>
           </div>
         </div>
@@ -372,17 +375,24 @@ function AccordionRow({ row, open, onToggle, rc }) {
 
         {margem != null && (
           <div className="acc-stat">
-            <span className="acc-stat-k">%</span>
+            <span className="acc-stat-k">Margem</span>
             <span className={`acc-stat-v mono ${profitClass(margem)}`}>{margem.toFixed(1)}%</span>
           </div>
         )}
 
         <div className="acc-stat">
-          <span className="acc-stat-k">Vol. 24h</span>
+          <span className="acc-stat-k">Vendas/dia</span>
           <span className="acc-stat-v mono acc-muted">
             {bestVol ? bestVol.toLocaleString('pt-PT') : '—'}
           </span>
         </div>
+
+        {bestCity && cityData.length > 1 && (
+          <div className="acc-stat acc-stat-cidade">
+            <span className="acc-stat-k">Melhor cidade</span>
+            <span className="acc-stat-v acc-muted">{bestCity.display}</span>
+          </div>
+        )}
 
         <span className="acc-chev">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -402,15 +412,15 @@ function AccordionRow({ row, open, onToggle, rc }) {
                     <th>
                       <div className="acc-th-imgs">
                         <div className="acc-th-img">
-                          <ItemImg src={ITEM_ICON_URL(rawId)} alt="raw" size={80} />
+                          <ItemImg src={ITEM_ICON_URL(rawId)} alt="raw" size={48} />
                           <span>×{row.qtTronco ?? 4}</span>
                         </div>
                         <div className="acc-th-img">
-                          <ItemImg src={ITEM_ICON_URL(antId)} alt="ant" size={80} />
+                          <ItemImg src={ITEM_ICON_URL(antId)} alt="ant" size={48} />
                           <span>×1</span>
                         </div>
                         <div className="acc-th-img">
-                          <ItemImg src={ITEM_ICON_URL(outId)} alt="out" size={80} />
+                          <ItemImg src={ITEM_ICON_URL(outId)} alt="out" size={48} />
                           <span>×1</span>
                         </div>
                       </div>
@@ -604,7 +614,7 @@ function IndicacoesPanel({ strategy, strategyLoading, lucroMode, setLucroMode, c
                   <ItemImg
                     src={ITEM_ICON_URL(rc.buildRefinedId(tier, level))}
                     alt={r.item}
-                    size={72}
+                    size={44}
                   />
                 </div>
                 <div className="ind-item-mid">
@@ -784,7 +794,7 @@ export default function ResourceMaster({ resource, calculateFn, strategyFn }) {
             onClick={refreshAll}
             disabled={loading || strategyLoading}
           >
-            {loading || strategyLoading ? 'Carregando…' : 'Refresh preços'}
+            {loading || strategyLoading ? 'Carregando…' : 'Atualizar preços'}
           </button>
         </div>
 

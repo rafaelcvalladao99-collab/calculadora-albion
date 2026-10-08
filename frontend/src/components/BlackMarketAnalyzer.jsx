@@ -1,8 +1,9 @@
 import { useEffect, useState, useRef } from 'react';
 import { blackMarketStream } from '../api.js';
 import { ICONS } from './Icons.jsx';
+import { tempoDesde, classeIdade } from '../utils/tempo.js';
 
-const ITEMS_PER_PAGE = 20;
+const ITEMS_PER_PAGE = 25;
 const MAX_IDADE_HORAS = 24;
 // Vender direto para a ordem de compra do Mercado Negro paga só a taxa de venda.
 const TAXA_PREMIUM = 4;
@@ -19,35 +20,8 @@ function tierColor(tier) {
   return map[tier] || 'var(--text-tertiary)';
 }
 
-function timeAgo(label) {
-  if (!label) return '—';
-  const parts = String(label).split(' ');
-  if (parts.length < 2) return label;
-  const [datePart, timePart] = parts;
-  const [y, m, d] = datePart.split('-').map(Number);
-  const [hh, mm] = timePart.split(':').map(Number);
-  const diffMs = Date.now() - new Date(Date.UTC(y, m - 1, d, hh, mm)).getTime();
-  if (diffMs < 60000) return 'agora';
-  const mins = Math.floor(diffMs / 60000);
-  if (mins < 60) return `${mins}m atrás`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h atrás`;
-  return `${Math.floor(hrs / 24)}d atrás`;
-}
-
-function timeAgoClass(label) {
-  if (!label) return 'bm-time bm-time-danger';
-  const parts = String(label).split(' ');
-  if (parts.length < 2) return 'bm-time';
-  const [datePart, timePart] = parts;
-  const [y, m, d] = datePart.split('-').map(Number);
-  const [hh, mm] = timePart.split(':').map(Number);
-  if (!y || !m || !d) return 'bm-time bm-time-danger';
-  const hrs = (Date.now() - new Date(Date.UTC(y, m - 1, d, hh, mm)).getTime()) / 3600000;
-  if (hrs > 6) return 'bm-time bm-time-danger';
-  if (hrs > 2) return 'bm-time bm-time-warn';
-  return 'bm-time';
-}
+const timeAgo = (valor) => tempoDesde(valor);
+const timeAgoClass = (valor) => classeIdade(valor);
 
 function desvioLabel(desvio) {
   if (desvio === null || desvio === undefined) {
@@ -433,18 +407,18 @@ export default function BlackMarketAnalyzer() {
                     Vol/dia{sortInd('volume')}
                   </th>
                   <th
-                    className={thClass('desvio')}
+                    className={`${thClass('desvio')} bm-desvio`}
                     onClick={() => handleSort('desvio')}
                     title="Desvio do buy order em relação ao preço médio histórico no BM"
                   >
-                    Desvio{sortInd('desvio')}
+                    Vs. média{sortInd('desvio')}
                   </th>
                   <th
-                    className={thClass('coeficiente')}
+                    className={`${thClass('coeficiente')} bm-coef`}
                     onClick={() => handleSort('coeficiente')}
                     title="(Lucro × Vol/dia) ÷ Peso — maior = melhor para transportar"
                   >
-                    Coef.{sortInd('coeficiente')}
+                    Valor p/ viagem{sortInd('coeficiente')}
                   </th>
                 </tr>
               </thead>
@@ -473,10 +447,8 @@ export default function BlackMarketAnalyzer() {
                           <div className="bm-icon">
                             <img
                               src={`https://render.albiononline.com/v1/item/${op.id}.png?quality=1`}
-                              alt={op.nomeBase}
-                              width={56}
-                              height={56}
-                              style={{ display: 'block', borderRadius: 2 }}
+                              alt=""
+                              loading="lazy"
                               onError={(e) => { e.target.onerror = null; e.target.style.opacity = '0'; }}
                             />
                           </div>
@@ -496,10 +468,10 @@ export default function BlackMarketAnalyzer() {
                             </div>
                             <div className="bm-item-l2">
                               <span className="bm-tag-tier mono" style={{ color: tierColor(op.tier) }}>
-                                [{op.tier}]
+                                {op.tier}
                               </span>
                               {op.encanto && op.encanto !== '0' && (
-                                <span className="bm-tag-enc mono">.{op.encanto}</span>
+                                <span className={`enc-pill enc-${op.encanto}`}>.{op.encanto}</span>
                               )}
                               {op.estado && (
                                 <span className="bm-tag-quality">{op.estado}</span>
@@ -515,7 +487,7 @@ export default function BlackMarketAnalyzer() {
                           {op.compra?.toLocaleString('pt-PT')}
                         </div>
                         <div className="bm-money-s">
-                          {op.origem}
+                          {String(op.origem).replace(/([a-z])([A-Z])/g, '$1 $2')}
                           {' · '}
                           <span className={timeAgoClass(op.atualizacaoOrig)}>
                             {timeAgo(op.atualizacaoOrig)}

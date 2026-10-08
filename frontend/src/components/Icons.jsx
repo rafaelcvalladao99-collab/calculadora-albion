@@ -89,6 +89,19 @@ export const IconChevronDown = (p) => (
   <SvgBase {...p}><path d="M6 9l6 6l6 -6"/></SvgBase>
 );
 
+export const IconMenu = (p) => (
+  <SvgBase {...p}>
+    <path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/>
+  </SvgBase>
+);
+
+export const IconAlert = (p) => (
+  <SvgBase {...p}>
+    <path d="M12 9v4"/><path d="M12 17h.01"/>
+    <path d="M10.4 3.9L2.6 17.5A1.8 1.8 0 0 0 4.2 20h15.6a1.8 1.8 0 0 0 1.6-2.5L13.6 3.9a1.8 1.8 0 0 0-3.2 0z"/>
+  </SvgBase>
+);
+
 export const IconSlash = (p) => (
   <SvgBase {...p}><path d="M16 4l-8 16"/></SvgBase>
 );
@@ -217,6 +230,8 @@ export const ICONS = {
   chevronRight: IconChevronRight,
   chevronDown: IconChevronDown,
   slash: IconSlash,
+  menu: IconMenu,
+  alert: IconAlert,
   search: IconSearch,
   refresh: IconRefresh,
   check: IconCheck,

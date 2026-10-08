@@ -193,7 +193,7 @@ function SameCityTable({ rows }) {
                             <ICONS.chevronRight size={14} />
                           </span>
                         )}
-                        <ItemImg id={r.output} size={60} />
+                        <ItemImg id={r.output} size={40} />
                         <span className="poc-item-name">{r.potionName}</span>
                       </div>
                     </td>
@@ -273,7 +273,7 @@ function BrecilienTable({ rows }) {
                             <ICONS.chevronRight size={14} />
                           </span>
                         )}
-                        <ItemImg id={r.output} size={60} />
+                        <ItemImg id={r.output} size={40} />
                         <span className="poc-item-name">{r.potionName}</span>
                       </div>
                     </td>

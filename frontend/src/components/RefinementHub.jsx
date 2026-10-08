@@ -1,15 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { strategyWood, strategyFiber, strategyLeather, strategyMetal } from '../api.js';
 import { ICONS } from './Icons.jsx';
+import { tempoDesde, classeIdade } from '../utils/tempo.js';
 
 const ITEM_ICON_URL = (id) => `https://render.albiononline.com/v1/item/${id}.png?quality=1`;
 
 const RESOURCE_INFO = {
-  wood:    { label: 'Madeira', suffix: '_PLANKS',   color: 'var(--wood)',    bg: 'rgba(122,92,58,0.18)'   },
-  fiber:   { label: 'Fibra',   suffix: '_CLOTH',    color: 'var(--fiber)',   bg: 'rgba(107,138,78,0.18)'  },
-  leather: { label: 'Couro',   suffix: '_LEATHER',  color: 'var(--leather)', bg: 'rgba(160,98,42,0.18)'   },
-  metal:   { label: 'Minério', suffix: '_METALBAR', color: 'var(--metal)',   bg: 'rgba(122,138,154,0.18)' },
+  wood:    { label: 'Madeira', produto: 'Tábuas', suffix: '_PLANKS',   color: 'var(--wood)'    },
+  fiber:   { label: 'Fibra',   produto: 'Tecido', suffix: '_CLOTH',    color: 'var(--fiber)'   },
+  leather: { label: 'Couro',   produto: 'Couro',  suffix: '_LEATHER',  color: 'var(--leather)' },
+  metal:   { label: 'Minério', produto: 'Barras', suffix: '_METALBAR', color: 'var(--metal)'   },
 };
+
+// Margem acima disso quase sempre é preço velho ou errado na API.
+const MARGEM_SUSPEITA = 60;
 
 const FOCO_BASE = { T4: 41, T5: 103, T6: 257, T7: 643, T8: 1607 };
 const MULT_ENCHANT = [1, 1.5, 2.5, 5, 10];
@@ -78,41 +82,6 @@ function buildId(resource, item) {
 
 // ─── Sub-components ───────────────────────────────────────────────────────
 
-function ModePill({ value, onChange }) {
-  return (
-    <div className="pill" role="tablist">
-      <button
-        role="tab"
-        aria-selected={value === 'sem'}
-        className={`pill-opt ${value === 'sem' ? 'pill-on' : ''}`}
-        onClick={() => onChange('sem')}
-      >
-        Sem Foco
-      </button>
-      <button
-        role="tab"
-        aria-selected={value === 'com'}
-        className={`pill-opt ${value === 'com' ? 'pill-on' : ''}`}
-        onClick={() => onChange('com')}
-      >
-        Com Foco
-      </button>
-    </div>
-  );
-}
-
-function ResourceBadge({ resource }) {
-  const info = RESOURCE_INFO[resource];
-  return (
-    <span className="rbadge" style={{
-      borderLeftColor: info.color,
-      background: info.bg,
-    }}>
-      {info.label}
-    </span>
-  );
-}
-
 function formatPeak(p) {
   if (!p) return '—';
   return `${String(p.start).padStart(2, '0')}h–${String(p.end).padStart(2, '0')}h`;
@@ -135,23 +104,44 @@ function fmtPct(v) {
 
 function ItemCell({ resource, item, imgId }) {
   const [tier, enc = '0'] = String(item).split('.');
+  const info = RESOURCE_INFO[resource];
   return (
     <div className="item-cell">
       <div className="item-icon">
         <img
           src={ITEM_ICON_URL(imgId)}
-          alt={item}
-          width={64}
-          height={64}
-          style={{ objectFit: 'contain', width: 64, height: 64 }}
-          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          alt=""
+          loading="lazy"
+          onError={(e) => { e.currentTarget.style.visibility = 'hidden'; }}
         />
       </div>
-      <span className="item-name">
-        {tier}{enc !== '0' && <sup className="enc">.{enc}</sup>}
-      </span>
+      <div className="item-text">
+        <span className="item-name">
+          {info.produto} {tier}
+          {enc !== '0' && <span className={`enc-pill enc-${enc}`}>.{enc}</span>}
+        </span>
+        <span className="item-sub" style={{ '--cor-recurso': info.color }}>{info.label}</span>
+      </div>
     </div>
   );
+}
+
+function SituacaoPreco({ row, pct }) {
+  if (row.estimado) {
+    return (
+      <span className="alerta-preco" title="Faltou preço atual de algum material; a conta usou a média da semana.">
+        <ICONS.alert size={13} /> estimado
+      </span>
+    );
+  }
+  if (pct != null && pct > MARGEM_SUSPEITA) {
+    return (
+      <span className="alerta-preco" title="Margem alta demais: confira o preço no jogo antes de refinar.">
+        <ICONS.alert size={13} /> conferir
+      </span>
+    );
+  }
+  return <span className={classeIdade(row.atualizacao)}>{tempoDesde(row.atualizacao)}</span>;
 }
 
 // ─── HubTable ──────────────────────────────────────────────────────────────
@@ -182,9 +172,19 @@ function HubTable({ title, subtitle, rows, getValue, getPercent, valueLabel, val
     else { setSortCol(col); setSortAsc(false); }
   }
 
-  if (!rows?.length) return null;
-
   const SortIcon = sortAsc ? ICONS.arrowUp : ICONS.arrowDown;
+  const cabecalho = (col, rotulo, cls) => (
+    <th
+      className={`${cls} rt-sort-header${sortCol === col ? ' rt-sort' : ''}`}
+      onClick={() => handleSort(col)}
+      aria-sort={sortCol === col ? (sortAsc ? 'ascending' : 'descending') : undefined}
+    >
+      <span className="rt-th-in">
+        {rotulo}
+        {sortCol === col && <SortIcon size={12} />}
+      </span>
+    </th>
+  );
 
   return (
     <div className="card hub-table-card">
@@ -192,74 +192,59 @@ function HubTable({ title, subtitle, rows, getValue, getPercent, valueLabel, val
         <h2 className="hub-table-title">{title}</h2>
         {subtitle && <div className="hub-table-sub">{subtitle}</div>}
       </div>
-      <div className="hub-table-scroll">
-        <table className="rt">
-          <thead>
-            <tr>
-              <th className="rt-num">#</th>
-              <th className="rt-item">Item</th>
-              <th className="rt-res">Recurso</th>
-              <th
-                className={`rt-lucro${sortCol === 'value' ? ' rt-sort' : ''} rt-sort-header`}
-                onClick={() => handleSort('value')}
-              >
-                <span>{valueLabel}</span>
-                {sortCol === 'value' && <SortIcon size={11} />}
-              </th>
-              <th
-                className={`rt-pct${sortCol === 'pct' ? ' rt-sort' : ''} rt-sort-header`}
-                onClick={() => handleSort('pct')}
-              >
-                %
-              </th>
-              <th
-                className={`rt-vol${sortCol === 'vol' ? ' rt-sort' : ''} rt-sort-header`}
-                onClick={() => handleSort('vol')}
-              >
-                Vol. 24h
-              </th>
-              <th className="rt-pico">Pico (UTC-3)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedRows.map((r, i) => {
-              const rank = i + 1;
-              const topClass = rank <= 3 ? `rt-top rt-top-${rank}` : '';
-              const val = getValue(r);
-              const pct = getPercent(r);
-              const imgId = buildId(r.resource, r.item);
-              const valOk = val != null && val > -8e8;
-              const pctOk = pct != null;
-              return (
-                <tr key={`${r.resource}-${r.item}-${i}`} className={topClass}>
-                  <td className="rt-num">{String(rank).padStart(2, '0')}</td>
-                  <td className="rt-item">
-                    <ItemCell resource={r.resource} item={r.item} imgId={imgId} />
-                  </td>
-                  <td className="rt-res"><ResourceBadge resource={r.resource} /></td>
-                  <td className={`rt-lucro mono ${valOk ? (val >= 0 ? 'pos' : 'neg') : ''}`}>
-                    {valueFormat(val)}
-                  </td>
-                  <td className={`rt-pct mono ${pctOk ? (pct >= 0 ? 'pos' : 'neg') : ''}`}>
-                    {fmtPct(pct)}
-                  </td>
-                  <td className="rt-vol mono">
-                    {r.volume != null ? r.volume.toLocaleString('pt-BR') : '—'}
-                  </td>
-                  <td className="rt-pico mono">{formatPeak(r.peakHoursLocal)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {!rows?.length ? (
+        <p className="hub-loading-hint">Sem dados ainda.</p>
+      ) : (
+        <div className="hub-table-scroll">
+          <table className="rt">
+            <thead>
+              <tr>
+                <th className="rt-num">#</th>
+                <th className="rt-item">Item</th>
+                {cabecalho('value', valueLabel, 'rt-lucro')}
+                {cabecalho('pct', 'Margem', 'rt-pct')}
+                {cabecalho('vol', 'Vendas/dia', 'rt-vol')}
+                <th className="rt-atual">Preço</th>
+                <th className="rt-pico">Hora de pico</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sortedRows.map((r, i) => {
+                const val = getValue(r);
+                const pct = getPercent(r);
+                const valOk = val != null && val > -8e8;
+                const pctOk = pct != null;
+                const suspeito = r.estimado || (pctOk && pct > MARGEM_SUSPEITA);
+                return (
+                  <tr key={`${r.resource}-${r.item}-${i}`} className={suspeito ? 'rt-suspeito' : ''}>
+                    <td className="rt-num">{i + 1}</td>
+                    <td className="rt-item">
+                      <ItemCell resource={r.resource} item={r.item} imgId={buildId(r.resource, r.item)} />
+                    </td>
+                    <td className={`rt-lucro mono ${valOk ? (val >= 0 ? 'pos' : 'neg') : ''}`}>
+                      {valueFormat(val)}
+                    </td>
+                    <td className={`rt-pct mono ${pctOk ? (pct >= 0 ? 'pos' : 'neg') : ''}`}>
+                      {fmtPct(pct)}
+                    </td>
+                    <td className="rt-vol mono">
+                      {r.volume != null ? r.volume.toLocaleString('pt-BR') : '—'}
+                    </td>
+                    <td className="rt-atual"><SituacaoPreco row={r} pct={pct} /></td>
+                    <td className="rt-pico mono">{formatPeak(r.peakHoursLocal)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── RefinementHub ─────────────────────────────────────────────────────────
 export default function RefinementHub() {
-  const [mode, setMode] = useState('sem');
   const [buyOrder, setBuyOrder] = useState(false);
   const [dailyBonus, setDailyBonus] = useState(0);
   const [resourceData, setResourceData] = useState({});
@@ -312,9 +297,7 @@ export default function RefinementHub() {
 
   const errorList = Object.entries(errors);
 
-  const tableTitle = mode === 'sem' ? 'TOP 15 — LUCRO LOCAL' : 'TOP 15 — LUCRO / FOCO';
-  const tableSubtitle = isLoading ? `Carregando ${loadedCount}/4 recursos…` : null;
-  const tableRows = mode === 'sem' ? data.topSemFoco : data.topComFoco;
+  const carregando = isLoading ? `Carregando ${loadedCount}/4 recursos…` : null;
 
   return (
     <div className="page-inner">
@@ -362,31 +345,33 @@ export default function RefinementHub() {
         </div>
       )}
 
-      {/* Mode toggle */}
-      <div className="hub-mode-wrap">
-        <ModePill value={mode} onChange={setMode} />
-      </div>
-
       {/* Initial loading hint */}
       {loadedCount === 0 && isLoading && (
         <p className="hub-loading-hint">Buscando dados de todos os recursos…</p>
       )}
 
-      {/* Ranking table */}
+      {/* As duas tabelas lado a lado quando a tela permite */}
       {loadedCount > 0 && (
-        <HubTable
-          title={tableTitle}
-          subtitle={tableSubtitle}
-          rows={tableRows}
-          getValue={mode === 'sem'
-            ? (r) => r.lucro
-            : (r) => r.focoUnidades > 0 ? r.lucroComFoco / r.focoUnidades : -9e8}
-          getPercent={mode === 'sem'
-            ? (r) => (r.custoLocal > 0 && r.lucro > -8e8) ? (r.lucro / r.custoLocal) * 100 : null
-            : (r) => (r.custoComFoco > 0 && r.lucroComFoco > -8e8) ? (r.lucroComFoco / r.custoComFoco) * 100 : null}
-          valueLabel={mode === 'sem' ? 'Lucro' : 'Lucro/Foco'}
-          valueFormat={mode === 'sem' ? fmtProfit : fmtFoco}
-        />
+        <div className="hub-tables-grid">
+          <HubTable
+            title="Melhor lucro sem foco"
+            subtitle={carregando}
+            rows={data.topSemFoco}
+            getValue={(r) => r.lucro}
+            getPercent={(r) => (r.custoLocal > 0 && r.lucro > -8e8) ? (r.lucro / r.custoLocal) * 100 : null}
+            valueLabel="Lucro"
+            valueFormat={fmtProfit}
+          />
+          <HubTable
+            title="Melhor uso do foco"
+            subtitle={carregando}
+            rows={data.topComFoco}
+            getValue={(r) => r.focoUnidades > 0 ? r.lucroComFoco / r.focoUnidades : -9e8}
+            getPercent={(r) => (r.custoComFoco > 0 && r.lucroComFoco > -8e8) ? (r.lucroComFoco / r.custoComFoco) * 100 : null}
+            valueLabel="Prata por foco"
+            valueFormat={fmtFoco}
+          />
+        </div>
       )}
 
       {loadedCount === 0 && !isLoading && errorList.length === 0 && (

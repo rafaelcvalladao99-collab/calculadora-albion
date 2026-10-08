@@ -19,8 +19,8 @@
 
   /* Text */
   --text-primary:   #e8e3d8;
-  --text-secondary: #8a8578;
-  --text-tertiary:  #524f4a;
+  --text-secondary: #a8a294;
+  --text-tertiary:  #78736a;
 
   /* Semantic */
   --positive: #4caf82;
@@ -34,12 +34,21 @@
   --metal:   #7a8a9a;
 
   /* Type scale */
-  --text-xs:   11px;
+  --text-xs:   12px;
   --text-sm:   13px;
   --text-base: 14px;
   --text-md:   16px;
   --text-lg:   20px;
   --text-xl:   24px;
+
+  /* Cores de encantamento (iguais às do jogo) */
+  --enc-1: #5fbf6a;
+  --enc-2: #4f9fe6;
+  --enc-3: #b07ce8;
+  --enc-4: #e2b23c;
+
+  /* Espaçamento da página: cresce com a largura da tela */
+  --page-pad: clamp(12px, 2vw, 32px);
 
   /* Fonts */
   --font-display: 'Cinzel', 'Times New Roman', serif;
@@ -48,7 +57,7 @@
 
   /* Shell dimensions */
   --sb-w-closed: 56px;
-  --sb-w-open:   220px;
+  --sb-w-open:   200px;
   --tb-h:        48px;
 
   /* ── Backward-compat aliases (for non-redesigned components) ── */
@@ -59,7 +68,7 @@
   --surface-hover:   var(--bg-hover);
   --border:          var(--border-default);
   --text:            var(--text-primary);
-  --text-secondary:  #8a8578;
+  --text-secondary:  #a8a294;
   --muted:           var(--text-tertiary);
   --font:            var(--font-ui);
   --mono:            var(--font-mono);
