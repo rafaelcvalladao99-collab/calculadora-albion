@@ -34,12 +34,15 @@
   --metal:   #7a8a9a;
 
   /* Type scale */
-  --text-xs:   12px;
-  --text-sm:   13px;
-  --text-base: 14px;
-  --text-md:   16px;
-  --text-lg:   20px;
-  --text-xl:   24px;
+  --text-xs:   13px;
+  --text-sm:   14px;
+  --text-base: 15px;
+  --text-md:   17px;
+  --text-lg:   21px;
+  --text-xl:   25px;
+
+  /* Ícones de itens */
+  --icone-item: 48px;
 
   /* Cores de encantamento (iguais às do jogo) */
   --enc-1: #5fbf6a;

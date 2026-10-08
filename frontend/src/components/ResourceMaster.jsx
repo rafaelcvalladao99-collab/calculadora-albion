@@ -295,7 +295,7 @@ function FarmFamaPanel({ open, onToggle, strategy, strategyLoading, cfg, rc }) {
                         <ItemImg
                           src={ITEM_ICON_URL(rc.buildRefinedId(tier, level))}
                           alt={r.item}
-                          size={40}
+                          size={48}
                         />
                       </div>
                       <span className="ff2-label mono">{r.item}</span>
@@ -351,15 +351,15 @@ function AccordionRow({ row, open, onToggle, rc }) {
 
         <div className="acc-ing-stack">
           <div className="acc-ing">
-            <ItemImg src={ITEM_ICON_URL(rawId)} alt="raw" size={36} />
+            <ItemImg src={ITEM_ICON_URL(rawId)} alt="raw" size={48} />
             <span className="ing-qty">×{row.qtTronco ?? 4}</span>
           </div>
           <div className="acc-ing acc-ing-dim">
-            <ItemImg src={ITEM_ICON_URL(antId)} alt="ant" size={36} />
+            <ItemImg src={ITEM_ICON_URL(antId)} alt="ant" size={48} />
             <span className="ing-qty">×1</span>
           </div>
           <div className="acc-ing">
-            <ItemImg src={ITEM_ICON_URL(outId)} alt="out" size={36} />
+            <ItemImg src={ITEM_ICON_URL(outId)} alt="out" size={48} />
             <span className="ing-qty">×1</span>
           </div>
         </div>
@@ -614,7 +614,7 @@ function IndicacoesPanel({ strategy, strategyLoading, lucroMode, setLucroMode, c
                   <ItemImg
                     src={ITEM_ICON_URL(rc.buildRefinedId(tier, level))}
                     alt={r.item}
-                    size={44}
+                    size={56}
                   />
                 </div>
                 <div className="ind-item-mid">
