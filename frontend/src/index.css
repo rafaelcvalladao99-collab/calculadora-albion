@@ -34,15 +34,15 @@
   --metal:   #7a8a9a;
 
   /* Type scale */
-  --text-xs:   13px;
-  --text-sm:   14px;
-  --text-base: 15px;
-  --text-md:   17px;
-  --text-lg:   21px;
-  --text-xl:   25px;
+  --text-xs:   14px;
+  --text-sm:   15px;
+  --text-base: 16px;
+  --text-md:   18px;
+  --text-lg:   22px;
+  --text-xl:   26px;
 
   /* Ícones de itens */
-  --icone-item: 48px;
+  --icone-item: 56px;
 
   /* Cores de encantamento (iguais às do jogo) */
   --enc-1: #5fbf6a;
@@ -60,7 +60,7 @@
 
   /* Shell dimensions */
   --sb-w-closed: 56px;
-  --sb-w-open:   200px;
+  --sb-w-open:   220px;
   --tb-h:        48px;
 
   /* ── Backward-compat aliases (for non-redesigned components) ── */

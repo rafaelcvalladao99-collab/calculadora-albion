@@ -295,7 +295,7 @@ function FarmFamaPanel({ open, onToggle, strategy, strategyLoading, cfg, rc }) {
                         <ItemImg
                           src={ITEM_ICON_URL(rc.buildRefinedId(tier, level))}
                           alt={r.item}
-                          size={48}
+                          size={56}
                         />
                       </div>
                       <span className="ff2-label mono">{r.item}</span>
@@ -351,15 +351,15 @@ function AccordionRow({ row, open, onToggle, rc }) {
 
         <div className="acc-ing-stack">
           <div className="acc-ing">
-            <ItemImg src={ITEM_ICON_URL(rawId)} alt="raw" size={48} />
+            <ItemImg src={ITEM_ICON_URL(rawId)} alt="raw" size={56} />
             <span className="ing-qty">×{row.qtTronco ?? 4}</span>
           </div>
           <div className="acc-ing acc-ing-dim">
-            <ItemImg src={ITEM_ICON_URL(antId)} alt="ant" size={48} />
+            <ItemImg src={ITEM_ICON_URL(antId)} alt="ant" size={56} />
             <span className="ing-qty">×1</span>
           </div>
           <div className="acc-ing">
-            <ItemImg src={ITEM_ICON_URL(outId)} alt="out" size={48} />
+            <ItemImg src={ITEM_ICON_URL(outId)} alt="out" size={56} />
             <span className="ing-qty">×1</span>
           </div>
         </div>
@@ -412,15 +412,15 @@ function AccordionRow({ row, open, onToggle, rc }) {
                     <th>
                       <div className="acc-th-imgs">
                         <div className="acc-th-img">
-                          <ItemImg src={ITEM_ICON_URL(rawId)} alt="raw" size={48} />
+                          <ItemImg src={ITEM_ICON_URL(rawId)} alt="raw" size={56} />
                           <span>×{row.qtTronco ?? 4}</span>
                         </div>
                         <div className="acc-th-img">
-                          <ItemImg src={ITEM_ICON_URL(antId)} alt="ant" size={48} />
+                          <ItemImg src={ITEM_ICON_URL(antId)} alt="ant" size={56} />
                           <span>×1</span>
                         </div>
                         <div className="acc-th-img">
-                          <ItemImg src={ITEM_ICON_URL(outId)} alt="out" size={48} />
+                          <ItemImg src={ITEM_ICON_URL(outId)} alt="out" size={56} />
                           <span>×1</span>
                         </div>
                       </div>
@@ -614,7 +614,7 @@ function IndicacoesPanel({ strategy, strategyLoading, lucroMode, setLucroMode, c
                   <ItemImg
                     src={ITEM_ICON_URL(rc.buildRefinedId(tier, level))}
                     alt={r.item}
-                    size={56}
+                    size={64}
                   />
                 </div>
                 <div className="ind-item-mid">
