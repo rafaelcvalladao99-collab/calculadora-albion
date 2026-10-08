@@ -1,148 +1,73 @@
-// ─── Cache de preços com TTL ───
-const PRICE_CACHE = new Map();
-const PRICE_CACHE_TTL = 5 * 60 * 1000; // 5 minutos
-const PRICE_CACHE_MAX_SIZE = 500;
-const PRICE_PENDING = new Map(); // deduplicação: evita chamar a API duas vezes para o mesmo key
+/**
+ * Funções usadas pela arbitragem, Mercado Negro e compra de equipamento.
+ * A busca em si fica em `albionData.js`; aqui só ajustamos o formato de saída.
+ */
+import { buscarPrecos, buscarHistorico, dividir } from './albionData.js';
 
-const PRICE_CHUNK_SIZE = 100;
-const PRICE_CONCURRENCY = 5;
-const PRICE_THROTTLE_MS = 300;
+export const chunk = dividir;
 
-const HISTORY_CHUNK_SIZE = 50;
-const HISTORY_CONCURRENCY = 3;
-const HISTORY_THROTTLE_MS = 300;
-
-function getPriceCacheKey(itemIds, locations, quality) {
-  return `${itemIds.sort().join(',')}|${locations}|${quality}`;
-}
-
-function getCachedPrices(key) {
-  const cached = PRICE_CACHE.get(key);
-  if (cached && Date.now() - cached.ts < PRICE_CACHE_TTL) return cached.data;
-  PRICE_CACHE.delete(key);
-  return null;
-}
-
-function setCachedPrices(key, data) {
-  PRICE_CACHE.set(key, { data, ts: Date.now() });
-  if (PRICE_CACHE.size > PRICE_CACHE_MAX_SIZE) {
-    const now = Date.now();
-    for (const [k, v] of PRICE_CACHE) {
-      if (now - v.ts > PRICE_CACHE_TTL) PRICE_CACHE.delete(k);
-    }
-  }
-}
-
-export function chunk(arr, size) {
-  const out = [];
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-  return out;
+function marcarFalhas(lista, falhas) {
+  Object.defineProperty(lista, 'falhas', { value: falhas, enumerable: false });
+  return lista;
 }
 
 export async function fetchPricesMarket(itemIds, locations, quality = 0) {
-  const unique = [...new Set(itemIds.filter(Boolean))];
-  const loc = Array.isArray(locations) ? locations.join(',') : locations;
-  const allChunks = chunk(unique, PRICE_CHUNK_SIZE);
-  const merged = [];
-  const concurrency = PRICE_CONCURRENCY;
-  const qualitiesParam = quality > 0 ? `&qualities=${quality}` : '';
-
-  for (let i = 0; i < allChunks.length; i += concurrency) {
-    const batch = allChunks.slice(i, i + concurrency);
-    const calls = batch.map(async (part) => {
-      const cacheKey = getPriceCacheKey(part, loc, quality);
-      const cached = getCachedPrices(cacheKey);
-      if (cached) return cached;
-      if (PRICE_PENDING.has(cacheKey)) return PRICE_PENDING.get(cacheKey);
-
-      const url = `https://www.albion-online-data.com/api/v2/stats/prices/${part.join(',')}?locations=${encodeURIComponent(loc)}${qualitiesParam}`;
-      const promise = fetch(url, { headers: { Accept: 'application/json' } })
-        .then(res => { if (!res.ok) throw new Error(`Albion prices HTTP ${res.status}`); return res.json(); })
-        .then(data => { setCachedPrices(cacheKey, data); return data; })
-        .finally(() => PRICE_PENDING.delete(cacheKey));
-      PRICE_PENDING.set(cacheKey, promise);
-      return promise;
-    });
-
-    const results = await Promise.allSettled(calls);
-    for (const r of results) {
-      if (r.status === 'fulfilled' && Array.isArray(r.value)) merged.push(...r.value);
-    }
-
-    if (i + concurrency < allChunks.length) {
-      await new Promise((resolve) => setTimeout(resolve, PRICE_THROTTLE_MS));
-    }
+  const q = Number(quality) || 0;
+  const r = await buscarPrecos(itemIds, locations, { qualidades: q > 0 ? [q] : undefined });
+  if (r.falhas > 0) {
+    console.warn(`[albion] ${r.falhas}/${r.totalPartes} partes de preços falharam`);
   }
-
-  return merged;
+  return marcarFalhas(r.dados, r.falhas);
 }
 
-export async function fetchHistoryMarket(itemIds, locations, qualities = null) {
-  const unique = [...new Set(itemIds.filter(Boolean))];
-  const loc = Array.isArray(locations) ? locations.join(',') : locations;
-  const allChunks = chunk(unique, HISTORY_CHUNK_SIZE);
-  const concurrency = HISTORY_CONCURRENCY;
-  const qualParam = Array.isArray(qualities) && qualities.length > 0
-    ? `&qualities=${qualities.join(',')}`
-    : '';
-
-  // Buscar histórico horário (time-scale=1)
-  const merged = [];
-  for (let i = 0; i < allChunks.length; i += concurrency) {
-    const batch = allChunks.slice(i, i + concurrency);
-    const calls = batch.map(async (part) => {
-      const url = `https://www.albion-online-data.com/api/v2/stats/history/${part.join(',')}?locations=${encodeURIComponent(loc)}&time-scale=1${qualParam}`;
-      const res = await fetch(url, { headers: { Accept: 'application/json' } });
-      if (!res.ok) return [];
-      return res.json();
-    });
-
-    const results = await Promise.allSettled(calls);
-    for (const r of results) {
-      if (r.status === 'fulfilled' && Array.isArray(r.value)) merged.push(...r.value);
-    }
-
-    if (i + concurrency < allChunks.length) {
-      await new Promise((resolve) => setTimeout(resolve, HISTORY_THROTTLE_MS));
-    }
-  }
-
-  // volumeMap: key → { volume, avgPrice }
-  // Se qualities foi passado, a chave inclui qualidade: `itemId|location|quality`
-  // Caso contrário, mantém formato original: `itemId|location`
+/**
+ * Volume médio diário (últimas 72 h) e preço médio, a partir do histórico por hora.
+ * Chave: `itemId|local` ou, se `qualities` for passado, `itemId|local|qualidade`.
+ */
+export function calcularVolumes(entradas, porQualidade) {
   const volumeMap = new Map();
 
-  for (const entry of merged) {
+  for (const entry of entradas) {
     if (!entry.data || !Array.isArray(entry.data)) continue;
-    const key = qualParam
+    const key = porQualidade
       ? `${entry.item_id}|${entry.location}|${entry.quality ?? 1}`
       : `${entry.item_id}|${entry.location}`;
 
-    const sorted = [...entry.data].sort(
-      (a, b) => new Date(a.timestamp) - new Date(b.timestamp),
-    );
+    const sorted = [...entry.data].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
-    // Vol.24h: soma das últimas 72h / 3
+    // Volume por dia: soma das últimas 72 horas / 3
     const last72h = sorted.slice(-72);
-    const totalCount72 = last72h.reduce((s, d) => s + (d.item_count || 0), 0);
-    const avgVol = totalCount72 / 3;
+    const avgVol = last72h.reduce((s, d) => s + (d.item_count || 0), 0) / 3;
 
-    // Preço médio: média simples dos avg_price nas horas com vendas
-    // Janelas progressivas: 72h → 7d (168h) → 14d (336h)
+    // Preço médio nas horas com vendas, em janelas cada vez maiores: 72 h → 7 d → 14 d
     let avgPrice = 0;
     for (const windowSize of [72, 168, 336]) {
-      const salesHours = sorted.slice(-windowSize).filter(d => (d.item_count || 0) > 0);
+      const salesHours = sorted.slice(-windowSize).filter((d) => (d.item_count || 0) > 0);
       if (salesHours.length > 0) {
-        avgPrice = Math.round(salesHours.reduce((s, d) => s + (d.avg_price || 0), 0) / salesHours.length);
+        avgPrice = Math.round(
+          salesHours.reduce((s, d) => s + (d.avg_price || 0), 0) / salesHours.length,
+        );
         break;
       }
     }
 
     const prev = volumeMap.get(key);
-    if (!prev || avgVol > prev.volume) {
-      volumeMap.set(key, { volume: avgVol, avgPrice });
-    }
+    if (!prev || avgVol > prev.volume) volumeMap.set(key, { volume: avgVol, avgPrice });
   }
 
   return volumeMap;
+}
+
+export async function fetchHistoryMarket(itemIds, locations, qualities = null) {
+  const porQualidade = Array.isArray(qualities) && qualities.length > 0;
+  const r = await buscarHistorico(itemIds, locations, {
+    escala: 1,
+    qualidades: porQualidade ? qualities : undefined,
+  });
+  if (r.falhas > 0) {
+    console.warn(`[albion] ${r.falhas}/${r.totalPartes} partes de histórico falharam`);
+  }
+  const mapa = calcularVolumes(r.dados, porQualidade);
+  mapa.falhas = r.falhas;
+  return mapa;
 }

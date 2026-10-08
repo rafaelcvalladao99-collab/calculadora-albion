@@ -347,72 +347,88 @@ async function carregarPesosDoJogo() {
   }
 }
 
+// De onde veio a lista de itens: 'internet', 'arquivo-local' ou 'reserva-minima'.
+let FONTE_ITENS = null;
+let PROXIMA_TENTATIVA = 0;
+const ITENS_LOCAIS = new URL('../data/items.json', import.meta.url);
+const RETENTAR_DOWNLOAD_MS = 10 * 60_000;
+
+export function estadoItens() {
+  return { fonte: FONTE_ITENS, total: ALL_ITEM_IDS_CACHE?.length || 0 };
+}
+
+async function processarListaDeItens(data) {
+  if (!Array.isArray(data) || data.length === 0) throw new Error('Lista de itens vazia ou inválida');
+
+  const ids = [
+    ...new Set(data.map((item) => String(item.UniqueName || '')).filter((id) => id.length > 0)),
+  ];
+
+  const nameCache = data.reduce((acc, item) => {
+    const key = String(item.UniqueName || '');
+    const ptName =
+      item.LocalizedNames?.['PT-BR'] ||
+      item.LocalizedNames?.['pt-BR'] ||
+      item.LocalizedNames?.['pt-br'];
+    if (key) acc[key] = ptName || item.LocalizedNames?.['EN-US'] || key.replace(/_/g, ' ');
+    return acc;
+  }, {});
+  setItemNameCache(nameCache);
+  CATEGORIES_CACHE = construirMapaCategorias(data);
+  SORTED_CATS_CACHE = null;
+  ALL_ITEM_IDS_CACHE = ids;
+  return ids;
+}
+
+async function baixarLista() {
+  const res = await fetch(ITEM_ID_SOURCE_URL, { headers: { Accept: 'application/json' } });
+  if (!res.ok) throw new Error(`Falha ao baixar a lista de itens (HTTP ${res.status})`);
+  return res.json();
+}
+
+async function lerListaLocal() {
+  const { readFile } = await import('node:fs/promises');
+  return JSON.parse(await readFile(ITENS_LOCAIS, 'utf-8'));
+}
+
 export async function carregarItensDoJogo() {
-  if (ALL_ITEM_IDS_CACHE && ALL_ITEM_IDS_CACHE.length > 0) return ALL_ITEM_IDS_CACHE;
+  const temListaBoa = ALL_ITEM_IDS_CACHE?.length > 0 && FONTE_ITENS === 'internet';
+  const aguardandoRetentar = ALL_ITEM_IDS_CACHE?.length > 0 && Date.now() < PROXIMA_TENTATIVA;
+  if (temListaBoa || aguardandoRetentar) return ALL_ITEM_IDS_CACHE;
+
+  // 1) Lista mais nova, direto do repositório da comunidade
   try {
-    console.log('[Items] Iniciando carregamento de itens do jogo...');
-    const res = await fetch(ITEM_ID_SOURCE_URL, { headers: { Accept: 'application/json' } });
-    if (!res.ok) throw new Error(`Falha ao buscar itens do jogo (${res.status})`);
-    const data = await res.json();
-
-    console.log(
-      `[Items] JSON carregado: ${Array.isArray(data) ? data.length : 'não é array'} registros`,
-    );
-
-    const ids = Array.isArray(data)
-      ? [
-          ...new Set(
-            data.map((item) => String(item.UniqueName || '')).filter((id) => id.length > 0),
-          ),
-        ]
-      : [];
-
-    ALL_ITEM_IDS_CACHE = ids;
-
-    if (Array.isArray(data)) {
-      const nameCache = data.reduce((acc, item) => {
-        const key = String(item.UniqueName || '');
-        const ptName =
-          item.LocalizedNames?.['PT-BR'] ||
-          item.LocalizedNames?.['pt-BR'] ||
-          item.LocalizedNames?.['pt-br'];
-        if (key) acc[key] = ptName || item.LocalizedNames?.['EN-US'] || key.replace(/_/g, ' ');
-        return acc;
-      }, {});
-      setItemNameCache(nameCache);
-
-      console.log('[Items] Construindo mapa de categorias...');
-      CATEGORIES_CACHE = construirMapaCategorias(data);
-      console.log(
-        `[Items] ✓ Mapa de categorias construído com ${Object.keys(CATEGORIES_CACHE || {}).length} categorias`,
-      );
-    }
-
-    console.log(`[Items] Carregados ${ids.length} itens do jogo com sucesso`);
-
-    // Carregar pesos reais em paralelo (não bloqueia se falhar)
+    const ids = await processarListaDeItens(await baixarLista());
+    FONTE_ITENS = 'internet';
+    console.log(`[Items] ✓ ${ids.length} itens carregados da internet`);
     await carregarPesosDoJogo();
-
-    if (CATEGORIES_CACHE) {
-      const dist = Object.entries(CATEGORIES_CACHE)
-        .map(([cat, items]) => `${cat}: ${items.length}`)
-        .sort((a, b) => parseInt(b.split(': ')[1]) - parseInt(a.split(': ')[1]))
-        .slice(0, 15);
-      console.log(`[Items] Top 15 categorias:`, dist);
-    }
     return ids;
   } catch (err) {
-    console.error('[Items] ❌ Erro ao carregar itens:', err.message || err);
-    const bases = Object.entries(CATEGORIAS)
-      .filter(([cat]) => cat !== 'Todos')
-      .flatMap(([, itens]) => itens);
-    const fallbackIds = [...new Set(bases)].flatMap((b) => TIERS.map((t) => `${t}${b}`));
-    ALL_ITEM_IDS_CACHE = fallbackIds;
-    console.log(
-      `[Items] Usando fallback: ${fallbackIds.length} itens gerados a partir de categorias estáticas`,
-    );
-    return fallbackIds;
+    console.error('[Items] ❌ Não consegui baixar a lista de itens:', err.message || err);
+    PROXIMA_TENTATIVA = Date.now() + RETENTAR_DOWNLOAD_MS;
   }
+
+  // 2) Cópia salva no projeto (backend/data/items.json)
+  if (FONTE_ITENS === 'arquivo-local' && ALL_ITEM_IDS_CACHE?.length > 0) return ALL_ITEM_IDS_CACHE;
+  try {
+    const ids = await processarListaDeItens(await lerListaLocal());
+    FONTE_ITENS = 'arquivo-local';
+    console.warn(`[Items] ⚠️ Usando a cópia local da lista: ${ids.length} itens (pode estar desatualizada)`);
+    return ids;
+  } catch (err) {
+    console.error('[Items] ❌ Cópia local da lista também falhou:', err.message || err);
+  }
+
+  // 3) Último recurso: só os itens básicos das categorias fixas
+  const bases = Object.entries(CATEGORIAS)
+    .filter(([cat]) => cat !== 'Todos')
+    .flatMap(([, itens]) => itens);
+  ALL_ITEM_IDS_CACHE = [...new Set(bases)].flatMap((b) => TIERS.map((t) => `${t}${b}`));
+  FONTE_ITENS = 'reserva-minima';
+  console.error(
+    `[Items] ❌ Usando reserva mínima de ${ALL_ITEM_IDS_CACHE.length} itens — as buscas vão ficar incompletas`,
+  );
+  return ALL_ITEM_IDS_CACHE;
 }
 
 export async function gerarListaItens(categoria) {

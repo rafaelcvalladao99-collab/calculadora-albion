@@ -17,12 +17,27 @@ function getApiBase() {
 
 const base = getApiBase();
 
+/** Cabeçalho com o código de acesso (só existe quando o app pede senha). */
+export function authHeaders() {
+  const token = sessionStorage.getItem('albion_token');
+  return token ? { 'X-Access-Token': token } : {};
+}
+
+export function apiBase() {
+  return base;
+}
+
 async function request(path, options = {}) {
   const fullUrl = `${base}${path}`;
 
   const res = await fetch(fullUrl, {
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...authHeaders(),
+      ...(options.headers || {}),
+    },
   });
 
   const text = await res.text();
@@ -93,7 +108,7 @@ export function marketOpportunitiesStream(params, { onChunk, onProgress, onDone,
     try {
       const res = await fetch(`${base}/api/market/opportunities/stream?${qs}`, {
         signal: controller.signal,
-        headers: { Accept: 'text/event-stream' },
+        headers: { Accept: 'text/event-stream', ...authHeaders() },
       });
 
       if (!res.ok) {
@@ -126,13 +141,13 @@ export function marketOpportunitiesStream(params, { onChunk, onProgress, onDone,
 
           if (event.type === 'chunk') {
             onChunk?.(event.oportunidades || []);
-            onProgress?.({ processados: event.processados, totalItens: event.totalItens });
+            onProgress?.({ processados: event.processados, totalItens: event.totalItens, falhas: event.falhas || 0 });
           } else if (event.type === 'progress') {
-            onProgress?.({ processados: event.processados, totalItens: event.totalItens });
+            onProgress?.({ processados: event.processados, totalItens: event.totalItens, falhas: event.falhas || 0 });
           } else if (event.type === 'start') {
-            onProgress?.({ processados: 0, totalItens: event.totalItens });
+            onProgress?.({ processados: 0, totalItens: event.totalItens, falhas: 0 });
           } else if (event.type === 'done') {
-            onDone?.();
+            onDone?.({ falhas: event.falhas || 0, taxa: event.taxa });
           } else if (event.type === 'error') {
             onError?.(event.message);
           }
@@ -172,7 +187,7 @@ export function blackMarketStream(params, { onChunk, onProgress, onDone, onError
     try {
       const res = await fetch(`${base}/api/blackmarket/opportunities/stream${qs ? '?' + qs : ''}`, {
         signal: controller.signal,
-        headers: { Accept: 'text/event-stream' },
+        headers: { Accept: 'text/event-stream', ...authHeaders() },
       });
 
       if (!res.ok) {
@@ -201,13 +216,13 @@ export function blackMarketStream(params, { onChunk, onProgress, onDone, onError
 
           if (event.type === 'chunk') {
             onChunk?.(event.oportunidades || []);
-            onProgress?.({ processados: event.processados, totalItens: event.totalItens });
+            onProgress?.({ processados: event.processados, totalItens: event.totalItens, falhas: event.falhas || 0 });
           } else if (event.type === 'progress') {
-            onProgress?.({ processados: event.processados, totalItens: event.totalItens });
+            onProgress?.({ processados: event.processados, totalItens: event.totalItens, falhas: event.falhas || 0 });
           } else if (event.type === 'start') {
-            onProgress?.({ processados: 0, totalItens: event.totalItens });
+            onProgress?.({ processados: 0, totalItens: event.totalItens, falhas: 0 });
           } else if (event.type === 'done') {
-            onDone?.();
+            onDone?.({ falhas: event.falhas || 0, taxa: event.taxa });
           } else if (event.type === 'error') {
             onError?.(event.message);
           }
@@ -227,6 +242,10 @@ export function blackMarketStream(params, { onChunk, onProgress, onDone, onError
   })();
 
   return { abort: () => controller.abort() };
+}
+
+export function authRequired() {
+  return request('/api/auth/required');
 }
 
 export function validateToken(token) {

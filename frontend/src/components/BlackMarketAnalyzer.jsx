@@ -4,7 +4,13 @@ import { ICONS } from './Icons.jsx';
 
 const ITEMS_PER_PAGE = 20;
 const MAX_IDADE_HORAS = 24;
-const TAX = 0.97;
+// Vender direto para a ordem de compra do Mercado Negro paga só a taxa de venda.
+const TAXA_PREMIUM = 4;
+const TAXA_SEM_PREMIUM = 8;
+
+function lerPremiumSalvo() {
+  try { return localStorage.getItem('albion_premium') !== 'false'; } catch { return true; }
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -104,6 +110,8 @@ export default function BlackMarketAnalyzer() {
   const [filtroCidade,     setFiltroCidade]     = useState('Todos');
   const [modoCaerleon,     setModoCaerleon]     = useState(false);
   const [copiedId,         setCopiedId]         = useState(null);
+  const [premium,          setPremium]          = useState(lerPremiumSalvo);
+  const [falhas,           setFalhas]           = useState(0);
   const streamRef  = useRef(null);
   const scanIdRef  = useRef(0);
 
@@ -120,6 +128,7 @@ export default function BlackMarketAnalyzer() {
     setErr(null);
     setItemsProcessados(0);
     setTotalItens(0);
+    setFalhas(0);
     setCurrentPage(1);
     setSortCol('lucro');
     setSortAsc(false);
@@ -129,7 +138,7 @@ export default function BlackMarketAnalyzer() {
     const acumulador = [];
 
     const stream = blackMarketStream(
-      { maxIdadeHoras: MAX_IDADE_HORAS, taxaVenda: '3' },
+      { maxIdadeHoras: MAX_IDADE_HORAS, premium: String(premium) },
       {
         onChunk: (oportunidades) => {
           if (scanIdRef.current !== currentScanId) return;
@@ -140,11 +149,17 @@ export default function BlackMarketAnalyzer() {
           }
           setRows([...acumulador]);
         },
-        onProgress: ({ processados, totalItens: total }) => {
+        onProgress: ({ processados, totalItens: total, falhas: f }) => {
           setItemsProcessados(processados);
           setTotalItens(total);
+          setFalhas(f || 0);
         },
-        onDone:  () => { if (scanIdRef.current !== currentScanId) return; setScanning(false); setLoading(false); },
+        onDone: (info) => {
+          if (scanIdRef.current !== currentScanId) return;
+          setFalhas(info?.falhas || 0);
+          setScanning(false);
+          setLoading(false);
+        },
         onError: (msg) => { if (scanIdRef.current !== currentScanId) return; setErr(msg); setScanning(false); setLoading(false); },
       },
     );
@@ -171,16 +186,25 @@ export default function BlackMarketAnalyzer() {
   const getPrecoEfetivo = (op) =>
     modoCaerleon && op.precoMedioBM > 0 ? op.precoMedioBM : op.buyOrderBM;
 
+  const fatorTaxa = 1 - (premium ? TAXA_PREMIUM : TAXA_SEM_PREMIUM) / 100;
+
+  // Lucro recalculado aqui, para refletir na hora a troca de premium/sem premium.
   const getLucroEfetivo = (op) => {
-    if (modoCaerleon && op.precoMedioBM > 0) return op.precoMedioBM * TAX - op.compra;
-    return Number(op.lucro) || 0;
+    const compra = Number(op.compra) || 0;
+    if (modoCaerleon && op.precoMedioBM > 0) return op.precoMedioBM * fatorTaxa - compra;
+    return (Number(op.buyOrderBM) || 0) * fatorTaxa - compra;
+  };
+
+  const alternarPremium = (valor) => {
+    setPremium(valor);
+    try { localStorage.setItem('albion_premium', String(valor)); } catch { /* sem armazenamento */ }
   };
 
   const validRows = rows.filter((op) => {
     if ((Number(op.volumeDiario) || 0) < volMinimo) return false;
     if (filtroCidade !== 'Todos' && op.origem !== filtroCidade) return false;
     if (modoCaerleon && (!op.precoMedioBM || op.precoMedioBM <= 0)) return false;
-    if (modoCaerleon && getLucroEfetivo(op) <= 0) return false;
+    if (getLucroEfetivo(op) <= 0) return false;
     return true;
   });
 
@@ -242,8 +266,25 @@ export default function BlackMarketAnalyzer() {
         <div className="bm-static">
           <span>Dados ≤ {MAX_IDADE_HORAS}h</span>
           <span className="bm-dot">·</span>
-          <span>Taxa 3%</span>
+          <span>Taxa {premium ? TAXA_PREMIUM : TAXA_SEM_PREMIUM}%</span>
         </div>
+
+        <label className={`cb${premium ? ' cb-on' : ''}`}>
+          <input
+            type="checkbox"
+            checked={premium}
+            onChange={(e) => { alternarPremium(e.target.checked); setCurrentPage(1); }}
+          />
+          <span className="cb-box">
+            {premium && (
+              <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.8"
+                      strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </span>
+          <span className="cb-label">Tenho premium</span>
+        </label>
 
         <label className="bm-field">
           <span className="bm-field-lbl">Vol. mín./dia</span>
@@ -338,6 +379,14 @@ export default function BlackMarketAnalyzer() {
           <span className="bm-count-n mono">{validRows.length.toLocaleString('pt-PT')}</span>
           <span>oportunidades encontradas</span>
         </div>
+      )}
+
+      {falhas > 0 && (
+        <p className="error">
+          {falhas} {falhas === 1 ? 'parte da busca falhou' : 'partes da busca falharam'} (a API
+          recusou ou não respondeu). Alguns itens podem estar faltando — tente buscar de novo daqui a
+          pouco.
+        </p>
       )}
 
       {err && <p className="error">{err}</p>}

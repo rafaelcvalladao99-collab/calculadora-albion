@@ -12,6 +12,8 @@ import {
   obterCategoriasDinamicas,
 } from './marketService.js';
 import { buscarOportunidadesBMStream } from './blackMarketService.js';
+import { getRegiao, setRegiao, estadoLimitador, REGIOES } from './albionData.js';
+import { estadoItens } from './marketItems.js';
 import {
   processarWood,
   estrategiaCompleta,
@@ -39,11 +41,23 @@ app.use(
 );
 app.use(express.json());
 
-const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
-if (!ACCESS_TOKEN) {
-  console.error('FATAL: ACCESS_TOKEN env var is required');
-  process.exit(1);
+// Código de acesso: obrigatório só quando o app roda como site público.
+// Rodando no seu computador, deixe ACCESS_TOKEN vazio e não haverá tela de senha.
+const ACCESS_TOKEN = (process.env.ACCESS_TOKEN || '').trim();
+const AUTH_ATIVA = ACCESS_TOKEN.length > 0;
+if (!AUTH_ATIVA) {
+  console.warn('[auth] ACCESS_TOKEN não definido: acesso livre (ok para uso local).');
 }
+
+const ROTAS_PUBLICAS = new Set(['/api/health', '/api/auth/validate', '/api/auth/required']);
+
+app.use((req, res, next) => {
+  if (!AUTH_ATIVA || !req.path.startsWith('/api/') || ROTAS_PUBLICAS.has(req.path)) return next();
+  // EventSource/stream também manda o código pela query, por isso aceitamos os dois.
+  const token = req.get('X-Access-Token') || req.query.token;
+  if (token === ACCESS_TOKEN) return next();
+  res.status(401).json({ error: 'Código de acesso inválido ou ausente' });
+});
 
 /** Wrapper: try/catch + log + 500 automático */
 const wrap = (fn) => async (req, res) => {
@@ -60,13 +74,32 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, service: 'calculadora-albion-api' });
 });
 
+app.get('/api/auth/required', (_req, res) => {
+  res.json({ required: AUTH_ATIVA });
+});
+
 /** Validação de token de acesso */
 app.post('/api/auth/validate', (req, res) => {
   const { token } = req.body || {};
-  if (typeof token === 'string' && token === ACCESS_TOKEN) {
+  if (!AUTH_ATIVA || (typeof token === 'string' && token === ACCESS_TOKEN)) {
     return res.json({ valid: true });
   }
   res.status(401).json({ valid: false, error: 'Token inválido' });
+});
+
+/** Estado do app: servidor do jogo, origem da lista de itens e uso da API. */
+app.get('/api/status', (_req, res) => {
+  res.json({
+    regiao: getRegiao(),
+    regioesDisponiveis: Object.keys(REGIOES),
+    itens: estadoItens(),
+    api: estadoLimitador(),
+  });
+});
+
+/** Troca o servidor do jogo (americas, europa, asia). */
+app.post('/api/status/regiao', (req, res) => {
+  res.json({ regiao: setRegiao(req.body?.regiao) });
 });
 
 // ─── Rotas de refino (calculate + strategy) ───
@@ -219,11 +252,7 @@ app.get('/api/blackmarket/opportunities/stream', async (req, res) => {
     'X-Accel-Buffering': 'no',
   });
 
-  const {
-    quality = '0',
-    maxIdadeHoras = '24',
-    taxaVenda = '3',
-  } = req.query;
+  const { quality = '0', maxIdadeHoras = '24', taxaVenda, premium = 'true' } = req.query;
 
   console.log('[SSE BM] Stream iniciado');
 
@@ -235,7 +264,8 @@ app.get('/api/blackmarket/opportunities/stream', async (req, res) => {
       {
         quality: parseInt(quality) || 0,
         maxIdadeHoras: parseInt(maxIdadeHoras) || 24,
-        taxaVenda: parseFloat(taxaVenda) || 3,
+        taxaVenda,
+        premium: premium !== 'false',
       },
       (event) => {
         if (closed) return;

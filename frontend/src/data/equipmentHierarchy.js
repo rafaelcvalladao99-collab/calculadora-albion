@@ -1,3 +1,4 @@
+import { authHeaders } from '../api.js';
 /**
  * Hierarquia de equipamentos - CARREGADO DINAMICAMENTE
  * Dados são obtidos de /api/equipment/hierarchy do backend
@@ -121,7 +122,7 @@ export async function loadEquipmentHierarchy() {
   try {
     const raw = import.meta.env.VITE_API_BASE;
     const base = raw == null || raw === '' ? '' : String(raw).trim().replace(/\/+$/, '');
-    const response = await fetch(`${base}/api/equipment/hierarchy`);
+    const response = await fetch(`${base}/api/equipment/hierarchy`, { headers: authHeaders() });
 
     if (!response.ok) {
       console.warn(`⚠️  Erro ao carregar hierarquia (${response.status}), usando fallback`);

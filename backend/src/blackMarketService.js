@@ -4,6 +4,7 @@ import {
   nomeItemEmPortugues,
   extrairInfoItem,
   obterPesoReal,
+  taxaVendaDireta,
 } from './marketConstants.js';
 import { gerarListaItens } from './marketItems.js';
 import { chunk, fetchPricesMarket, fetchHistoryMarket } from './marketPrices.js';
@@ -16,7 +17,7 @@ const ALL_LOCATIONS = [...CIDADES_SEGURAS, BLACK_MARKET];
 // Sell orders existem mas são do jogo, não de jogadores.
 // Para cidades de origem, usamos sell_price_min (ordem de venda mais barata).
 // Teleporte para o BM é gratuito (fica em Caerleon, custo = 0).
-function extrairOportunidadesBM(respostaPrecos, maxIdade, agora, taxaVendaNota) {
+export function extrairOportunidadesBM(respostaPrecos, maxIdade, agora, taxaVendaNota) {
   // bmPrices: `${itemId}|${qual}` → { buyMax, dataStr }
   const bmPrices = new Map();
   // cityPrices: `${itemId}|${cidade}|${qual}` → { sellMin, dataStr }
@@ -113,48 +114,64 @@ function extrairOportunidadesBM(respostaPrecos, maxIdade, agora, taxaVendaNota) 
   return oportunidades;
 }
 
+/** Taxa usada: a informada explicitamente, ou a do premium/sem premium. */
+export function resolverTaxaBM({ taxaVenda, premium = true } = {}) {
+  const explicita = parseFloat(taxaVenda);
+  if (Number.isFinite(explicita) && explicita >= 0 && explicita < 100) return explicita;
+  return taxaVendaDireta(premium);
+}
+
 export async function buscarOportunidadesBMStream(
-  { maxIdadeHoras = 24, quality = 0, taxaVenda = 3 },
+  { maxIdadeHoras = 24, quality = 0, taxaVenda, premium = true },
   onChunk,
 ) {
   const itens = await gerarListaItens('Todos');
 
   if (!Array.isArray(itens) || itens.length === 0) {
-    onChunk({ type: 'done', total: 0, processados: 0 });
+    onChunk({ type: 'done', total: 0, processados: 0, falhas: 0 });
     return;
   }
 
-  const locStr = ALL_LOCATIONS.join(',');
   const maxIdade = Number(maxIdadeHoras) || 24;
   const agora = Date.now();
   const qualityNum = Number(quality) || 0;
-  const taxaVendaNota = 1 - taxaVenda / 100;
+  const taxa = resolverTaxaBM({ taxaVenda, premium });
+  const taxaVendaNota = 1 - taxa / 100;
 
   const chunks = chunk(itens, ITEMS_PER_CHUNK);
   const totalItens = itens.length;
   let processados = 0;
   let totalOportunidades = 0;
+  let falhas = 0;
+  // O limitador global controla o ritmo; aqui só evitamos abrir pedidos demais de uma vez.
   const concurrency = 5;
 
-  onChunk({ type: 'start', totalItens, totalChunks: chunks.length });
+  onChunk({ type: 'start', totalItens, totalChunks: chunks.length, taxa });
 
   for (let i = 0; i < chunks.length; i += concurrency) {
     const batch = chunks.slice(i, i + concurrency);
 
     const batchResults = await Promise.allSettled(
       batch.map(async (chunkItems) => {
-        const respostaPrecos = await fetchPricesMarket(chunkItems, locStr, qualityNum);
-        return extrairOportunidadesBM(respostaPrecos, maxIdade, agora, taxaVendaNota);
+        const respostaPrecos = await fetchPricesMarket(chunkItems, ALL_LOCATIONS, qualityNum);
+        return {
+          ops: extrairOportunidadesBM(respostaPrecos, maxIdade, agora, taxaVendaNota),
+          falhas: respostaPrecos.falhas || 0,
+        };
       }),
     );
 
     const batchOps = [];
-    for (const result of batchResults) {
-      processados += ITEMS_PER_CHUNK;
-      if (result.status === 'fulfilled' && result.value.length > 0) {
-        batchOps.push(...result.value);
+    batch.forEach((chunkItems, idx) => {
+      processados += chunkItems.length;
+      const result = batchResults[idx];
+      if (result.status !== 'fulfilled') {
+        falhas++;
+        return;
       }
-    }
+      falhas += result.value.falhas;
+      batchOps.push(...result.value.ops);
+    });
 
     if (batchOps.length > 0) {
       const uniqueIds = [...new Set(batchOps.map((op) => op.id))];
@@ -178,19 +195,17 @@ export async function buscarOportunidadesBMStream(
         oportunidades: batchOps,
         processados: Math.min(processados, totalItens),
         totalItens,
+        falhas,
       });
     } else {
       onChunk({
         type: 'progress',
         processados: Math.min(processados, totalItens),
         totalItens,
+        falhas,
       });
-    }
-
-    if (i + concurrency < chunks.length) {
-      await new Promise((resolve) => setTimeout(resolve, 100));
     }
   }
 
-  onChunk({ type: 'done', total: totalOportunidades, processados: totalItens });
+  onChunk({ type: 'done', total: totalOportunidades, processados: totalItens, falhas, taxa });
 }

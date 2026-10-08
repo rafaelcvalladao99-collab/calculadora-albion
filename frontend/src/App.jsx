@@ -3,6 +3,7 @@ import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom'
 import ResourceMaster from './components/ResourceMaster.jsx';
 import LoginGate from './components/LoginGate.jsx';
 import { loadEquipmentHierarchy } from './data/equipmentHierarchy.js';
+import { authRequired } from './api.js';
 import {
   calculateWood, strategyWood,
   calculateFiber, strategyFiber,
@@ -146,7 +147,16 @@ export default function App() {
   const [equipmentReady, setEquipmentReady] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // Rodando no computador sem código de acesso, o servidor avisa que não precisa de senha.
   useEffect(() => {
+    if (authenticated) return;
+    authRequired()
+      .then((r) => { if (r && r.required === false) setAuthenticated(true); })
+      .catch(() => {});
+  }, [authenticated]);
+
+  useEffect(() => {
+    if (!authenticated) return;
     loadEquipmentHierarchy()
       .then(() => {
         console.log('✓ Equipamentos carregados');
@@ -156,7 +166,7 @@ export default function App() {
         console.error('Erro ao carregar equipamentos:', err);
         setEquipmentReady(true);
       });
-  }, []);
+  }, [authenticated]);
 
   // Ctrl/⌘ + B toggles sidebar
   useEffect(() => {

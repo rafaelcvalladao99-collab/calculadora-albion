@@ -33,6 +33,18 @@ export function obterPesoReal(itemId) {
   return 1.0; // fallback conservador
 }
 
+// ─── Taxas do mercado (em %) ───
+// Vender direto para uma ordem de compra paga só a taxa de venda.
+// Anunciar uma ordem de venda paga a taxa de venda + a taxa de anúncio.
+export const TAXA_VENDA_PREMIUM = 4;
+export const TAXA_VENDA_SEM_PREMIUM = 8;
+export const TAXA_ANUNCIO = 2.5;
+
+/** Taxa (%) para vender direto a uma ordem de compra, como no Mercado Negro. */
+export function taxaVendaDireta(premium = true) {
+  return premium ? TAXA_VENDA_PREMIUM : TAXA_VENDA_SEM_PREMIUM;
+}
+
 export const QUALITY_NAMES = {
   1: 'Normal',
   2: 'Bom',
