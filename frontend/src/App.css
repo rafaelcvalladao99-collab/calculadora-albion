@@ -1697,7 +1697,7 @@ table.result-table {
 
 /* ─── Indicações aside ───────────────────────────────────── */
 .ind {
-  flex: 0 0 272px;
+  flex: 0 0 clamp(280px, 20vw, 380px);
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
   border-radius: 8px;
@@ -3335,3 +3335,44 @@ table.result-table {
   .acc-head { gap: 12px; }
   .acc-stat { min-width: 0; }
 }
+
+/* ─── Refino: painel "Melhores opções" ─── */
+.ind-select-wrap { display: flex; flex-direction: column; gap: 4px; margin: 0 16px; }
+.ind-select-lbl { font-size: var(--text-xs); color: var(--text-secondary); }
+.ind-select-wrap .ind-select { margin: 0; width: 100%; }
+.ind-mode-bar {
+  text-transform: none;
+  letter-spacing: 0;
+  font-family: var(--font-ui);
+  font-weight: 400;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+.ind-list { list-style: none; margin: 0; padding: 0; }
+.ind-item { align-items: flex-start; gap: 12px; position: relative; }
+.ind-rank {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  width: 14px;
+  padding-top: 4px;
+  flex-shrink: 0;
+}
+.ind-item-mid { gap: 4px; }
+.ind-item-nome { font-size: var(--text-base); font-weight: 600; color: var(--text-primary); }
+.ind-item-valor { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.ind-item-valor > .mono { font-size: var(--text-lg); font-weight: 700; }
+.ind-item-unidade { font-size: var(--text-xs); color: var(--text-secondary); }
+.ind-dados {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 14px;
+  row-gap: 4px;
+  margin: 2px 0 0;
+}
+.ind-dados > div { display: flex; flex-direction: column; }
+.ind-dados dt { font-size: var(--text-xs); color: var(--text-tertiary); }
+.ind-dados dd { margin: 0; font-size: var(--text-sm); color: var(--text-primary); white-space: nowrap; }
+.ind-suspeito { box-shadow: inset 3px 0 0 var(--fama-spent); }
+.ind-suspeito .ind-item-valor > .mono { opacity: 0.6; }
+.ind-alerta { margin-top: 2px; }

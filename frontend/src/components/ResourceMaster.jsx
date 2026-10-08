@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { profitClass } from '../utils/profit.js';
+import { ICONS } from './Icons.jsx';
 
 const ITEM_ICON_URL = (id) => `https://render.albiononline.com/v1/item/${id}.png?quality=1`;
 
@@ -525,7 +526,7 @@ function AccordionRow({ row, open, onToggle, rc }) {
 
 // ─── Indicações aside ─────────────────────────────────────────────────────
 
-function IndicacoesPanel({ strategy, strategyLoading, lucroMode, setLucroMode, cfg, rc }) {
+function IndicacoesPanel({ strategy, strategyLoading, lucroMode, setLucroMode, cfg, rc, resource }) {
   // Lucro absoluto (em prata) — já reflete "Usar foco" porque cfg.foco é
   // enviado ao backend e muda a taxa de retorno usada no custo.
   function getLucroAbs(r) {
@@ -566,37 +567,44 @@ function IndicacoesPanel({ strategy, strategyLoading, lucroMode, setLucroMode, c
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [strategy, lucroMode]);
 
-  const cityAbbr = rc.cityDisplay.split(' ').map((w) => w[0]).join('');
-  const modeLabel =
+  const PRODUTO = { wood: 'Tábuas', fiber: 'Tecido', leather: 'Couro', metal: 'Barras' };
+  const produto = PRODUTO[resource] || '';
+  const nomesCidades = rc.cities?.map((c) => c.display).join(' ou ');
+  const descricaoModo =
     lucroMode === 'opt'
-      ? `Top Lucro ${rc.cities?.map((c) => c.display.split(' ').map((w) => w[0]).join('')).join('-') ?? ''}`
+      ? `Comprando e vendendo na melhor entre ${nomesCidades}`
       : lucroMode === 'ot'
-        ? 'Top Lucro OT'
-        : `Top Lucro · ${cityAbbr}`;
+        ? 'Comprando e vendendo na melhor cidade real'
+        : `Comprando e vendendo em ${rc.cityDisplay}`;
 
   return (
     <aside className="ind">
       <div className="ind-head">
-        <h3 className="ind-title">Indicações</h3>
-        <div className="ind-sub">Top 8 com volume · todas as tiers</div>
+        <h3 className="ind-title">Melhores opções</h3>
+        <div className="ind-sub">
+          Os 8 refinos de {produto.toLowerCase()} que mais rendem agora, em todos os tiers
+        </div>
       </div>
-      <select className="ind-select" value={lucroMode} onChange={(e) => setLucroMode(e.target.value)}>
-        <option value="local">Lucro {cityAbbr}</option>
-        {rc.cities && rc.cities.length > 1 && (
-          <option value="opt">
-            Lucro {rc.cities.map((c) => c.display.split(' ').map((w) => w[0]).join('')).join('-')}
-          </option>
-        )}
-        <option value="ot">Lucro OT</option>
-      </select>
-      <div className="ind-mode-bar">{modeLabel}</div>
+      <label className="ind-select-wrap">
+        <span className="ind-select-lbl">Onde comprar e vender</span>
+        <select className="ind-select" value={lucroMode} onChange={(e) => setLucroMode(e.target.value)}>
+          <option value="local">Só em {rc.cityDisplay}</option>
+          {rc.cities && rc.cities.length > 1 && (
+            <option value="opt">Melhor entre {nomesCidades}</option>
+          )}
+          <option value="ot">Melhor cidade real (qualquer uma)</option>
+        </select>
+      </label>
+      <div className="ind-mode-bar">
+        {descricaoModo} · {cfg.foco ? 'ordenado por prata ganha por ponto de foco' : 'ordenado por lucro por unidade'}
+      </div>
 
       {strategyLoading && <p className="ind-loading">Carregando…</p>}
       {strategy?.error && <p className="error" style={{ margin: '8px 16px' }}>{strategy.error}</p>}
 
       {!strategyLoading && rows.length > 0 && (
-        <ul className="ind-list">
-          {rows.map((r) => {
+        <ol className="ind-list">
+          {rows.map((r, idx) => {
             const lucro = getLucro(r);
             const lucroAbs = getLucroAbs(r);
             const vol = getVol(r);
@@ -607,48 +615,66 @@ function IndicacoesPanel({ strategy, strategyLoading, lucroMode, setLucroMode, c
                 ? (lucroAbs / custo) * 100
                 : null;
             const { tier, level } = parseTierItem(r.item);
+            const temLucro = lucro != null && lucro > -8e8;
+            const suspeito = r.estimado || (margem != null && margem > 60);
 
             return (
-              <li key={r.item} className="ind-item">
+              <li key={r.item} className={`ind-item${suspeito ? ' ind-suspeito' : ''}`}>
+                <span className="ind-rank mono">{idx + 1}</span>
                 <div className="ind-item-icon">
                   <ItemImg
                     src={ITEM_ICON_URL(rc.buildRefinedId(tier, level))}
-                    alt={r.item}
+                    alt=""
                     size={64}
                   />
                 </div>
                 <div className="ind-item-mid">
-                  <div className="ind-item-l1">
-                    <span className="ind-item-name mono">{r.item}</span>
-                    <span className={`mono ind-item-val ${lucro != null ? profitClass(lucro) : ''}`}>
-                      {lucro != null && lucro > -8e8
+                  <div className="ind-item-nome">
+                    {produto} {tier}
+                    {level !== '0' && <span className={`enc-pill enc-${level}`}>.{level}</span>}
+                  </div>
+                  <div className="ind-item-valor">
+                    <span className={`mono ${temLucro ? profitClass(lucro) : ''}`}>
+                      {temLucro
                         ? cfg.foco
-                          ? lucro.toFixed(2)
-                          : Math.round(lucro).toLocaleString('pt-PT')
+                          ? lucro.toFixed(2).replace('.', ',')
+                          : Math.round(lucro).toLocaleString('pt-BR')
                         : '—'}
                     </span>
-                    {cfg.foco && lucro != null && lucro > -8e8 && (
-                      <span className="mono acc-muted ind-item-unit">/foco</span>
-                    )}
-                  </div>
-                  <div className="ind-item-l2">
-                    {margem != null && (
-                      <span className={`mono ${profitClass(margem)}`}>{margem.toFixed(1)}%</span>
-                    )}
-                    <span className="ind-item-vol mono acc-muted">
-                      {vol?.toLocaleString('pt-PT') ?? '—'}
+                    <span className="ind-item-unidade">
+                      {cfg.foco ? 'prata por foco' : 'de lucro por unidade'}
                     </span>
-                    {peak != null && (
-                      <span className="ind-item-pico">
-                        {String(peak.start).padStart(2, '0')}h–{String(peak.end).padStart(2, '0')}h
-                      </span>
-                    )}
                   </div>
+                  <dl className="ind-dados">
+                    <div>
+                      <dt>Margem</dt>
+                      <dd className={`mono ${margem != null ? profitClass(margem) : ''}`}>
+                        {margem != null ? `${margem >= 0 ? '+' : ''}${margem.toFixed(1).replace('.', ',')}%` : '—'}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Vendas/dia</dt>
+                      <dd className="mono">{vol != null ? vol.toLocaleString('pt-BR') : '—'}</dd>
+                    </div>
+                    <div>
+                      <dt>Hora de pico</dt>
+                      <dd className="mono">
+                        {peak != null
+                          ? `${String(peak.start).padStart(2, '0')}h–${String(peak.end).padStart(2, '0')}h`
+                          : '—'}
+                      </dd>
+                    </div>
+                  </dl>
+                  {suspeito && (
+                    <div className="alerta-preco ind-alerta" title="Margem alta demais ou preço estimado: confira no jogo antes de refinar.">
+                      <ICONS.alert size={13} /> {r.estimado ? 'preço estimado' : 'margem alta, confira no jogo'}
+                    </div>
+                  )}
                 </div>
               </li>
             );
           })}
-        </ul>
+        </ol>
       )}
     </aside>
   );
@@ -860,6 +886,7 @@ export default function ResourceMaster({ resource, calculateFn, strategyFn }) {
         setLucroMode={setLucroMode}
         cfg={cfg}
         rc={rc}
+        resource={resource}
       />
     </div>
   );
